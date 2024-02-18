@@ -1,5 +1,6 @@
-const WebSocket = require("ws");
-const wss = new WebSocket.Server({ port: 8080 });
+import WebSocket, { WebSocketServer } from "ws";
+const wss = new WebSocketServer({port: 8080});
+
 const clients = {};
 const rooms = {};
 

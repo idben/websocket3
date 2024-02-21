@@ -32,6 +32,7 @@ wss.on("connection", (connection) => {
     
     if(parsedMessage.type === "createRoom"){
       let roomID = parsedMessage.roomID;
+      connection.roomID = roomID;
       rooms[roomID] = {
         id: parsedMessage.roomID,
         name: parsedMessage.roomName
@@ -55,6 +56,7 @@ wss.on("connection", (connection) => {
     if(parsedMessage.type === "joinRoom"){
       let roomID = parsedMessage.roomID;
       let fromID = parsedMessage.fromID;
+      connection.roomID = roomID;
       rooms[roomID].userList.push(fromID);
       let clientList = rooms[roomID].userList;
       rooms[roomID].userList.forEach(userID=>{
@@ -71,6 +73,7 @@ wss.on("connection", (connection) => {
       let fromID = parsedMessage.fromID;
       rooms[roomID].userList = arrayRemove(rooms[roomID].userList , fromID)
       let clientList = rooms[roomID].userList;
+      connection.roomID = undefined;
       rooms[roomID].userList.forEach(userID=>{
         const targetClient = clients[userID];
         if (targetClient && targetClient.readyState === WebSocket.OPEN) {
@@ -125,8 +128,9 @@ wss.on("connection", (connection) => {
   connection.on("close", () => {
     console.log("已經用者斷開連線");
     let dsID = connection.userId;
-    if (connection.userId) {
-      delete clients[connection.userId];
+    let dsRoomID = connection.roomID;
+    if (dsID) {
+      delete clients[dsID];
     }
     const otherClients = Object.keys(clients);
     wss.clients.forEach((client) => {
@@ -134,6 +138,30 @@ wss.on("connection", (connection) => {
         client.send(JSON.stringify({ type: "disconnected", otherClients , disconnectedID: dsID}));
       }
     });
+    if(dsRoomID){
+      rooms[dsRoomID].userList = arrayRemove(rooms[dsRoomID].userList , dsID);
+      let clientList = rooms[dsRoomID].userList;
+      rooms[dsRoomID].userList.forEach(userID=>{
+        const targetClient = clients[dsID];
+        if (targetClient && targetClient.readyState === WebSocket.OPEN) {
+          targetClient.send(JSON.stringify({ type: "leaveRoom", fromID: dsID, roomID: dsRoomID, clientList}));
+        }
+      });
+      if(rooms[dsRoomID].userList.length === 0){
+        delete rooms[dsRoomID];
+      }
+      let allRooms = [];
+      for (const [key, value] of Object.entries(rooms)) {
+        let id = key;
+        let name = value.name;
+        allRooms.push({id, name});
+      }
+      wss.clients.forEach((client) => {
+        if (client.readyState === WebSocket.OPEN) {
+          client.send(JSON.stringify({ type: "newRoom", allRooms }));
+        }
+      });
+    }
   });
 });
 
